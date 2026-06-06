@@ -35,6 +35,16 @@ export VT_API_KEY="your_virustotal_api_key"   # for hash intel
 export MAX_APK_MB=150                          # default: 150
 export UPLOAD_DIR="storage/uploads"
 export ARTIFACT_DIR="storage/artifacts"
+
+export LLM_PROVIDER=gemini
+export GEMINI_API_KEY=your_gemini_api_key
+export LLM_MODEL=gemini-2.5-flash
+
+#export LLM_PROVIDER=openai
+#export OPENAI_API_KEY=your_openai_api_key
+#export LLM_MODEL=gpt-4o-mini
+
+export CHROMA_DB_PATH=storage/chroma_db
 ```
 
 ---
@@ -156,6 +166,187 @@ GET /api/v1/intel/hash/{hash}?sources=virustotal  # single source
 GET /api/v1/intel/hash/{hash}/malwarebazaar       # shorthand
 GET /api/v1/intel/job/{job_id}                    # use job's sha256 automatically
 ```
+---
+
+## RAG Pipeline
+
+RAG means **Retrieval Augmented Generation**.
+
+This project uses RAG so the LLM does not guess blindly.  
+It compares the current APK with previously indexed APK patterns stored in ChromaDB.
+
+```text
+APK uploaded
+   ↓
+Static extraction JSON generated
+   ↓
+JSON split into chunks:
+   - Identity
+   - Permissions
+   - API Calls
+   - IOCs
+   - Risk
+   ↓
+Chunks converted into embeddings
+   ↓
+Stored in ChromaDB
+   ↓
+For new APK, similar past cases are retrieved
+   ↓
+LLM receives current APK evidence + similar cases
+   ↓
+Final AI verdict is generated
+```
+
+---
+
+## RAG Endpoints
+
+### Index APK into knowledge base
+
+```http
+POST /api/v1/rag/index
+Content-Type: application/json
+```
+
+Request:
+
+```json
+{
+  "job_id": "uuid-of-completed-job",
+  "verdict": "UNKNOWN"
+}
+```
+
+Allowed verdicts:
+
+```text
+MALICIOUS / SUSPICIOUS / SAFE / UNKNOWN
+```
+
+Response:
+
+```json
+{
+  "status": "indexed",
+  "job_id": "...",
+  "package_name": "com.example.app",
+  "chunks_indexed": 5,
+  "total_indexed": 25,
+  "verdict_stored": "UNKNOWN"
+}
+```
+
+---
+
+### Analyze APK using RAG + LLM
+
+```http
+POST /api/v1/rag/analyze
+Content-Type: application/json
+```
+
+Request:
+
+```json
+{
+  "job_id": "uuid-of-completed-job"
+}
+```
+
+Response:
+
+```json
+{
+  "status": "analyzed",
+  "job_id": "...",
+  "package_name": "com.example.app",
+  "extraction_score": 9,
+  "similar_cases_found": 4,
+  "llm_analysis": {
+    "verdict": "MALICIOUS",
+    "confidence": "HIGH",
+    "risk_score": 9,
+    "threat_category": "Banking Trojan",
+    "reasons": [
+      "Requests notification access which can be used to steal OTPs",
+      "Uses sensitive device identifier APIs",
+      "Starts after reboot using RECEIVE_BOOT_COMPLETED"
+    ],
+    "behavior_summary": "This app shows behavior similar to banking trojans that steal OTPs and collect device identifiers.",
+    "recommended_action": "BLOCK",
+       "ioc_highlights": [
+      "PERM:BIND_NOTIFICATION_LISTENER_SERVICE",
+      "API:getImei",
+      "SELF_SIGNED_CERT"
+    ]
+  }
+}
+```
+
+---
+
+### Check RAG status
+
+```http
+GET /api/v1/rag/status
+```
+
+Response:
+
+```json
+{
+  "status": "ok",
+  "total_chunks": 25
+}
+```
+
+---
+### Remove APK from knowledge base
+
+```http
+DELETE /api/v1/rag/index/{job_id}
+```
+
+---
+
+## LLM Verdict Structure
+
+| Field | Values |
+|---|---|
+| `verdict` | MALICIOUS / SUSPICIOUS / SAFE |
+| `confidence` | HIGH / MEDIUM / LOW |
+| `risk_score` | 0–10 |
+| `threat_category` | Banking Trojan, Spyware, Adware, Unknown |
+| `reasons` | Main evidence behind verdict |
+| `behavior_summary` | Simple explanation of app behavior |
+| `recommended_action` | BLOCK / QUARANTINE / INVESTIGATE / ALLOW |
+| `ioc_highlights` | Most suspicious indicators |
+
+---
+```text
+MALICIOUS:
+- READ_SMS + RECEIVE_BOOT_COMPLETED + getImei
+- Hardcoded C2 IPs or URLs
+- Accessibility abuse
+- Dynamic code loading
+- REQUEST_INSTALL_PACKAGES misuse
+
+SUSPICIOUS:
+- Self-signed certificate
+- Sensitive APIs without clear reason
+- Extra permissions beyond app purpose
+- Hardcoded IPs without strong malware behavior
+
+SAFE:
+- Permissions match app purpose
+- No suspicious IOCs
+- No risky API combinations
+- Normal certificate and app behavior
+```
+
+---
+## Verdict Decision Logic
 
 VirusTotal response example:
 ```json
