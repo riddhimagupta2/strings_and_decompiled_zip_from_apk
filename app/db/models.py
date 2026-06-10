@@ -26,6 +26,8 @@ class AnalysisJob(Base):
     updated_at     = Column(DateTime, default=lambda: datetime.now(timezone.utc),
                             onupdate=lambda: datetime.now(timezone.utc))
     error_message  = Column(Text, nullable=True)
+    progress_percent = Column(Integer, default=0, nullable=False)
+    progress_label   = Column(String, default="Queued for analysis", nullable=True)
 
     # hashes
     md5            = Column(String(32),  nullable=True)

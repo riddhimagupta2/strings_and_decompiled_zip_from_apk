@@ -1,8 +1,6 @@
 """
 Hash intelligence service.
-- Local DB lookup (check if we've seen this APK before)
 - VirusTotal v3 public API (requires VT_API_KEY env var)
-- MalwareBazaar public API (no key needed)
 """
 
 import os
@@ -14,7 +12,6 @@ logger = logging.getLogger(__name__)
 
 VT_API_KEY  = os.getenv("VT_API_KEY", "")
 VT_BASE_URL = "https://www.virustotal.com/api/v3"
-MB_BASE_URL = "https://mb-api.abuse.ch/api/v1/"
 
 
 async def lookup_virustotal(hash_value: str) -> dict[str, Any]:
@@ -55,63 +52,25 @@ async def lookup_virustotal(hash_value: str) -> dict[str, Any]:
                 },
             }
         except httpx.HTTPStatusError as e:
-            return {"source": "virustotal", "found": False,
-                    "error": f"HTTP {e.response.status_code}"}
+            msg = f"HTTP {e.response.status_code}"
+            if e.response.status_code == 401:
+                msg = "HTTP 401 — invalid or missing VirusTotal API key (check VT_API_KEY in .env)"
+            return {"source": "virustotal", "found": False, "error": msg}
         except Exception as e:
             return {"source": "virustotal", "found": False, "error": str(e)}
 
 
-async def lookup_malwarebazaar(hash_value: str) -> dict[str, Any]:
-    async with httpx.AsyncClient(timeout=15) as client:
-        try:
-            r = await client.post(
-                MB_BASE_URL,
-                data={"query": "get_info", "hash": hash_value},
-            )
-            r.raise_for_status()
-            body = r.json()
-            if body.get("query_status") != "ok":
-                return {"source": "malwarebazaar", "found": False, "data": None}
-            entry = body["data"][0] if body.get("data") else {}
-            return {
-                "source": "malwarebazaar",
-                "found":  bool(entry),
-                "data": {
-                    "file_name":    entry.get("file_name"),
-                    "file_type":    entry.get("file_type"),
-                    "file_size":    entry.get("file_size"),
-                    "first_seen":   entry.get("first_seen"),
-                    "last_seen":    entry.get("last_seen"),
-                    "tags":         entry.get("tags", []),
-                    "signature":    entry.get("signature"),
-                    "reporter":     entry.get("reporter"),
-                    "delivery_method": entry.get("delivery_method"),
-                    "malware_family": entry.get("tags", []),
-                } if entry else None,
-            }
-        except Exception as e:
-            return {"source": "malwarebazaar", "found": False, "error": str(e)}
-
-
 async def lookup_hash(hash_value: str, sources: list[str] | None = None) -> list[dict]:
-    """
-    Query one or more threat-intel sources for a file hash.
-    sources: ['virustotal', 'malwarebazaar'] — defaults to both.
-    """
-    sources = sources or ["virustotal", "malwarebazaar"]
+    sources = sources or ["virustotal"]
     results = []
 
     if "virustotal" in sources:
         vt = await lookup_virustotal(hash_value)
-        results.append({"hash_value": hash_value,
-                         "hash_type": _detect_hash_type(hash_value),
-                         **vt})
-
-    if "malwarebazaar" in sources:
-        mb = await lookup_malwarebazaar(hash_value)
-        results.append({"hash_value": hash_value,
-                         "hash_type": _detect_hash_type(hash_value),
-                         **mb})
+        results.append({
+            "hash_value": hash_value,
+            "hash_type": _detect_hash_type(hash_value),
+            **vt,
+        })
 
     return results
 

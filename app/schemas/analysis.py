@@ -46,6 +46,8 @@ class AnalysisResult(BaseModel):
     created_at: datetime
     updated_at: datetime
     error_message: Optional[str] = None
+    progress_percent: Optional[int] = 0
+    progress_label: Optional[str] = None
 
     # hashes
     md5: Optional[str] = None
@@ -105,6 +107,8 @@ class JobListItem(BaseModel):
     package_name: Optional[str]
     risk_score: Optional[float]
     sha256: Optional[str]
+    progress_percent: Optional[int] = 0
+    progress_label: Optional[str] = None
     created_at: datetime
 
     class Config:

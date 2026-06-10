@@ -56,12 +56,14 @@ async def submit_apk(
         f.write(content)
 
     job = AnalysisJob(
-        id         = job_id,
-        filename   = file.filename,
-        file_size  = len(content),
-        status     = JobStatus.pending,
-        created_at = datetime.now(timezone.utc),
-        updated_at = datetime.now(timezone.utc),
+        id               = job_id,
+        filename         = file.filename,
+        file_size        = len(content),
+        status           = JobStatus.pending,
+        progress_percent = 1,
+        progress_label   = "Queued for analysis",
+        created_at       = datetime.now(timezone.utc),
+        updated_at       = datetime.now(timezone.utc),
     )
     db.add(job)
     db.commit()
@@ -99,7 +101,20 @@ def list_jobs(
         except ValueError:
             raise HTTPException(400, f"Invalid status '{status}'")
     jobs = q.order_by(AnalysisJob.created_at.desc()).offset(skip).limit(limit).all()
-    return jobs
+    return [
+        JobListItem(
+            job_id           = job.id,
+            filename         = job.filename,
+            status           = job.status,
+            package_name     = job.package_name,
+            risk_score       = job.risk_score,
+            sha256           = job.sha256,
+            progress_percent = job.progress_percent or 0,
+            progress_label   = job.progress_label,
+            created_at       = job.created_at,
+        )
+        for job in jobs
+    ]
 
 
 @router.get("/jobs/{job_id}", response_model=AnalysisResult)
@@ -133,7 +148,9 @@ def get_job(job_id: str, db: Session = Depends(get_db)):
         status      = job.status,
         created_at  = job.created_at,
         updated_at  = job.updated_at,
-        error_message = job.error_message,
+        error_message   = job.error_message,
+        progress_percent = job.progress_percent or 0,
+        progress_label   = job.progress_label,
         md5         = job.md5,
         sha1        = job.sha1,
         sha256      = job.sha256,
