@@ -163,7 +163,6 @@ DELETE /api/v1/jobs/{job_id}
 ```
 GET /api/v1/intel/hash/{hash}                     # MD5/SHA1/SHA256
 GET /api/v1/intel/hash/{hash}?sources=virustotal  # single source
-GET /api/v1/intel/hash/{hash}/malwarebazaar       # shorthand
 GET /api/v1/intel/job/{job_id}                    # use job's sha256 automatically
 ```
 ---

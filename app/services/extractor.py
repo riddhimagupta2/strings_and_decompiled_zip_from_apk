@@ -12,7 +12,9 @@ import re
 import zipfile
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Optional
+
+ProgressCallback = Optional[Callable[[int, str], None]]
 
 from androguard.core.apk import APK
 from androguard.misc import AnalyzeAPK
@@ -262,18 +264,32 @@ def create_decompiled_zip(apk_path: str, artifact_dir: str, job_id: str) -> str:
     return out_path
 
 
-def analyze_apk(apk_path: str, artifact_dir: str, job_id: str) -> dict[str, Any]:
+def analyze_apk(
+    apk_path: str,
+    artifact_dir: str,
+    job_id: str,
+    on_progress: ProgressCallback = None,
+) -> dict[str, Any]:
     """
     Full static analysis. Returns a flat dict matching AnalysisJob columns.
     """
+    def progress(percent: int, label: str):
+        if on_progress:
+            on_progress(percent, label)
+
+    progress(5, "Reading APK file…")
     apk_data = Path(apk_path).read_bytes()
     hashes = compute_hashes(apk_data)
 
-    # ── Androguard full analysis ──────────────────────────────────────────────
+    progress(12, "Computing file hashes…")
+
+    progress(18, "Loading APK with Androguard…")
     try:
         apk_obj, dex_list, analysis = AnalyzeAPK(apk_path)
     except Exception as e:
         raise RuntimeError(f"Androguard AnalyzeAPK failed: {e}")
+
+    progress(32, "Extracting manifest & permissions…")
 
     # ── Manifest ──────────────────────────────────────────────────────────────
     package_name  = apk_obj.get_package()
@@ -299,6 +315,8 @@ def analyze_apk(apk_path: str, artifact_dir: str, job_id: str) -> dict[str, Any]
         pass
     intent_filters = list(dict.fromkeys(intent_filters))
 
+    progress(45, "Scanning classes & API calls…")
+
     # ── Class / method stats ──────────────────────────────────────────────────
     all_classes  = list(analysis.get_classes())
     class_names  = [c.name for c in all_classes]
@@ -316,6 +334,8 @@ def analyze_apk(apk_path: str, artifact_dir: str, job_id: str) -> dict[str, Any]
                     sig = f"{call.class_name}->{call_name}"
                     found_apis.append(sig)
     found_apis = list(dict.fromkeys(found_apis))[:500]
+
+    progress(58, "Extracting strings & IOCs…")
 
     # ── String extraction from DEX and Resources ──────────────────────────────
     dex_strings = []
@@ -347,8 +367,10 @@ def analyze_apk(apk_path: str, artifact_dir: str, job_id: str) -> dict[str, Any]
 
     iocs = extract_hardcoded_iocs(dex_corpus, res_corpus)
 
-    # ── Certificate ───────────────────────────────────────────────────────────
+    progress(72, "Analyzing certificate…")
     cert = extract_certificate(apk_obj)
+
+    progress(82, "Calculating risk score…")
 
     # ── Risk ──────────────────────────────────────────────────────────────────
     risk_flags = build_risk_flags(permissions, found_apis, iocs, cert, obf_ratio)
@@ -357,8 +379,10 @@ def analyze_apk(apk_path: str, artifact_dir: str, job_id: str) -> dict[str, Any]
     # ── Native libs ───────────────────────────────────────────────────────────
     native_libs = list(apk_obj.get_libraries()) or []
 
-    # ── Zip artifact ─────────────────────────────────────────────────────────
+    progress(90, "Building decompiled artifact…")
     zip_path = create_decompiled_zip(apk_path, artifact_dir, job_id)
+
+    progress(100, "Analysis complete")
 
     return {
         **hashes,

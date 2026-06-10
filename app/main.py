@@ -56,9 +56,6 @@ def create_app() -> FastAPI:
     app.include_router(intel_router)
     app.include_router(rag_router)
 
-    @app.get("/", include_in_schema=False)
-    
-
     @app.get("/health", tags=["Health"])
     def health():
         return {"status": "ok", "service": "apk-extraction-layer"}

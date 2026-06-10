@@ -9,7 +9,7 @@ router = APIRouter(prefix="/api/v1/rag", tags=["RAG Analysis"])
 
 class IndexRequest(BaseModel):
     job_id: str
-    verdict: str = "UNKNOWN"  
+    verdict: str = "UNKNOWN"
 
 
 class AnalyzeRequest(BaseModel):
@@ -19,13 +19,9 @@ class AnalyzeRequest(BaseModel):
 @router.post("/index")
 async def index_apk_endpoint(req: IndexRequest):
     try:
-          print("RAG INDEX START:", req.job_id, req.verdict)
-          result = await index_apk(req.job_id, req.verdict)
-          print("RAG INDEX SUCCESS:", result)
-          return {"status": "indexed", **result}
+        result = await index_apk(req.job_id, req.verdict)
+        return {"status": "indexed", **result}
     except Exception as e:
-        print("RAG INDEX ERROR TYPE:", type(e))
-        print("RAG INDEX ERROR MESSAGE:", repr(e))
         traceback.print_exc()
         raise HTTPException(
             status_code=500,
@@ -35,7 +31,6 @@ async def index_apk_endpoint(req: IndexRequest):
 
 @router.post("/analyze")
 async def analyze_apk_endpoint(req: AnalyzeRequest):
-    
     try:
         result = await analyze_apk(req.job_id)
         return {"status": "analyzed", **result}
@@ -48,7 +43,6 @@ async def analyze_apk_endpoint(req: AnalyzeRequest):
 
 @router.get("/status")
 def rag_status():
-    """Kitne APKs indexed hain."""
     return {
         "status":        "ok",
         "total_chunks":  get_indexed_count(),
@@ -57,6 +51,5 @@ def rag_status():
 
 @router.delete("/index/{job_id}")
 def delete_index(job_id: str):
-  
     delete_job_chunks(job_id)
     return {"status": "deleted", "job_id": job_id}
