@@ -12,8 +12,8 @@ load_dotenv()
 from app.db.session import init_db
 from app.api.routes.analysis import router as analysis_router
 from app.api.routes.intel    import router as intel_router
-# from app.api.routes.rag      import router as rag_router       
-# from app.services.rag.vector_store import init_vector_store 
+from app.api.routes.rag      import router as rag_router       
+from app.services.rag.vector_store import init_vector_store 
 
 
 
@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
    
     
     init_db()
-    # init_vector_store()
+    init_vector_store()
     yield
 
 
@@ -54,7 +54,7 @@ def create_app() -> FastAPI:
 
     app.include_router(analysis_router)
     app.include_router(intel_router)
-    # app.include_router(rag_router)
+    app.include_router(rag_router)
 
     @app.get("/health", tags=["Health"])
     def health():
