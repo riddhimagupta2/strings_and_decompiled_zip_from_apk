@@ -1,9 +1,5 @@
 import os
 import json
-import time
-import google.generativeai as genai
-from openai import OpenAI
-from google.api_core.exceptions import ResourceExhausted
 
 
 def call_llm(system_prompt: str, user_prompt: str) -> dict:
@@ -21,17 +17,21 @@ def call_llm(system_prompt: str, user_prompt: str) -> dict:
                 f"Unknown LLM_PROVIDER: {provider}. Use 'gemini' or 'openai'."
             )
 
-    except ResourceExhausted:
-        return {
-            "status": "error",
-            "message": "Gemini API quota exceeded. Please wait and try again later."
-        }
+    except Exception as e:
+        if e.__class__.__name__ == "ResourceExhausted":
+            return {
+                "status": "error",
+                "message": "Gemini API quota exceeded. Please wait and try again later."
+            }
+        raise
+
 
 def _call_gemini(system_prompt: str, user_prompt: str) -> dict:
-   
+    import google.generativeai as genai
+
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise ValueError("GEMINI_API_KEY not set in .env")
+        raise ValueError("GEMINI_API_KEY not set in environment")
 
     genai.configure(api_key=api_key)
 
@@ -47,10 +47,11 @@ def _call_gemini(system_prompt: str, user_prompt: str) -> dict:
 
 
 def _call_openai(system_prompt: str, user_prompt: str) -> dict:
-    
+    from openai import OpenAI
+
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        raise ValueError("OPENAI_API_KEY not set in .env")
+        raise ValueError("OPENAI_API_KEY not set in environment")
 
     client = OpenAI(api_key=api_key)
 
@@ -58,9 +59,9 @@ def _call_openai(system_prompt: str, user_prompt: str) -> dict:
         model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
         messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user",   "content": user_prompt},
+            {"role": "user", "content": user_prompt},
         ],
-        temperature=0.1,  
+        temperature=0.1,
     )
 
     raw_text = response.choices[0].message.content.strip()
@@ -68,17 +69,14 @@ def _call_openai(system_prompt: str, user_prompt: str) -> dict:
 
 
 def _parse_llm_response(raw_text: str) -> dict:
-   
     if raw_text.startswith("```"):
         lines = raw_text.split("\n")
-       
-        lines = [l for l in lines if not l.startswith("```")]
+        lines = [line for line in lines if not line.startswith("```")]
         raw_text = "\n".join(lines)
 
     try:
         return json.loads(raw_text.strip())
     except json.JSONDecodeError as e:
-       
         return {
             "verdict": "UNKNOWN",
             "confidence": "LOW",
