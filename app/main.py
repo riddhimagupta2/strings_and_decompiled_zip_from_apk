@@ -11,9 +11,9 @@ load_dotenv()
 
 from app.db.session import init_db
 from app.api.routes.analysis import router as analysis_router
-from app.api.routes.intel    import router as intel_router
-from app.api.routes.rag      import router as rag_router       
+from app.api.routes.intel    import router as intel_router       
 from app.services.rag.vector_store import init_vector_store 
+from app.api.routes.rag import router as rag_router
 
 
 
@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
    
     
     init_db()
-    init_vector_store()
+    # init_vector_store()
     yield
 
 
