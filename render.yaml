@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: apk-extractor-api
+    runtime: docker
+    plan: standard
+    healthCheckPath: /health
+    disk:
+      name: apk-storage
+      mountPath: /app/storage
+      sizeGB: 2
+    envVars:
+      - key: PORT
+        value: "8080"
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: LLM_MODEL
+        value: gemini-2.5-flash
+      - key: MAX_APK_MB
+        value: "150"
+      - key: UPLOAD_DIR
+        value: storage/uploads
+      - key: ARTIFACT_DIR
+        value: storage/artifacts
+      - key: CHROMA_DB_PATH
+        value: storage/chroma_db
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: VT_API_KEY
+        sync: false

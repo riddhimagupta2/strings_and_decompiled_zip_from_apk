@@ -25,7 +25,7 @@ async def lifespan(app: FastAPI):
    
     
     init_db()
-    # init_vector_store()
+    init_vector_store()
     yield
 
 
